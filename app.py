@@ -19,8 +19,7 @@ app.add_middleware(
 
 
 
-client = OpenAI(api_key="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"
-)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.post("/chat")
 async def chat(request: Request):
