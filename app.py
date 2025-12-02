@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Literal
 import os
 
 from dotenv import load_dotenv
@@ -37,9 +37,15 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 #   MODELO DE REQUEST
 # ===========================
 
+class ChatHistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
 class ChatRequest(BaseModel):
     message: str
-    username: Optional[str] = None  # nombre del usuario logueado
+    username: Optional[str] = None 
+    history: Optional[List[ChatHistoryMessage]] = None  
+
 
 
 # ===========================
@@ -306,12 +312,24 @@ async def chat(request: ChatRequest):
     try:
         system_messages = build_system_messages(topic, db_context)
 
+        history_messages = []
+        if request.history:
+            for h in request.history:
+                history_messages.append({
+                    "role": h.role,
+                    "content": h.content
+                })
+
+
+        openai_messages = [
+            *system_messages,
+            *history_messages,
+            {"role": "user", "content": message},
+        ]
+
         completion = client.chat.completions.create(
             model="gpt-3.5-turbo-0125",
-            messages=[
-                *system_messages,
-                {"role": "user", "content": message},
-            ],
+            messages=openai_messages,
             temperature=0.7,
             max_tokens=400,
         )
@@ -321,7 +339,7 @@ async def chat(request: ChatRequest):
             "reply": reply,
             "used_topic": topic,
             "used_username": request.username,
-            "db_context": db_context,  # útil para debug o demo con el profe
+            "db_context": db_context,
         }
 
     except Exception as e:
